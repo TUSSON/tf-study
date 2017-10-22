@@ -1,76 +1,75 @@
 
 import numpy as np
 import tensorflow as tf
+import functions as F
 
 NUM_CLASSES = 10
 IMAGE_SIZE = 24
 IMAGE_PIXELS = IMAGE_SIZE * IMAGE_SIZE
 
-def weight_variable(shape):
-    inital = tf.truncated_normal(shape, stddev=0.1)
-    return tf.Variable(inital)
 
-def bias_variable(shape):
-    inital = tf.constant(0.1, shape=shape)
-    return tf.Variable(inital)
+def residual(h, channels, strides):
+    h0 = h
+    h1 = F.activation(F.batch_normalization(F.conv(h0, channels, strides, bias_term=False)))
+    h2 = F.batch_normalization(F.conv(h1, channels, bias_term=False))
+    # c.f. http://gitxiv.com/comments/7rffyqcPLirEEsmpX
+    print(h0, h2)
+    if F.volume(h0) == F.volume(h2):
+        h = h2 + h0
+    else:
+        h3 = F.avg_pool(h0)
+        h4 = tf.pad(h3, [[0,0], [0,0], [0,0], [int(channels / 4), int(channels / 4)]])
+        h = h2 + h4
+    return F.activation(h)
 
-def conv2d(x, W):
-    return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
+def residual_new(h, channels, strides):
+    h0 = h
+    h1 = F.conv(F.activation(F.batch_normalization(h0)), channels, strides)
+    h2 = F.conv(F.activation(F.batch_normalization(h1)), channels)
+    print(h0, h2)
+    if F.volume(h0) == F.volume(h2):
+        h = h2 + h0
+    else:
+        h3 = F.avg_pool(h0)
+        h4 = tf.pad(h3, [[0,0], [0,0], [0,0], [int(channels / 4), int(channels / 4)]])
+        h = h2 + h4
+    return h
 
-def max_pool_2x2(x):
-    return tf.nn.max_pool(x, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-
-def inference(images, is_training, conv1_units, conv2_units, hidden3_units, hidden4_units):
-    x_img = tf.reshape(images, [-1, IMAGE_SIZE, IMAGE_SIZE, 3])
-    with tf.name_scope('conv1'):
-        weights = weight_variable([5, 5, 3, conv1_units])
-        biases = bias_variable([conv1_units])
-        conv1 = conv2d(x_img, weights) + biases
-        norm1 = tf.nn.relu(tf.layers.batch_normalization(conv1, training=is_training))
-
-    pool1 = max_pool_2x2(norm1)
-
-    with tf.name_scope('conv2'):
-        weights = weight_variable([5, 5, conv1_units, conv2_units])
-        biases = bias_variable([conv2_units])
-        conv2 = conv2d(pool1, weights) + biases
-        norm2 = tf.nn.relu(tf.layers.batch_normalization(conv2, training=is_training))
-
-    pool2 = max_pool_2x2(norm2)
-
-    with tf.name_scope('hidden3'):
-        dim = 1
-        for d in pool2.get_shape()[1:]:
-            dim = dim * int(d)
-        weights = weight_variable([dim, hidden3_units])
-        biases = bias_variable([hidden3_units])
-        reshape = tf.reshape(pool2, [-1, dim])
-        hidden3 = tf.nn.relu(tf.matmul(reshape, weights) + biases)
-    
-    with tf.name_scope('hidden4'):
-        weights = weight_variable([hidden3_units, hidden4_units])
-        biases = bias_variable([hidden4_units])
-        hidden4 = tf.nn.relu(tf.matmul(hidden3, weights) + biases)
-
-    with tf.name_scope('sotmax_linear'):
-        weights = weight_variable([hidden4_units, NUM_CLASSES])
-        biases = bias_variable([NUM_CLASSES])
-        logits = tf.matmul(hidden4, weights) + biases
-
-    return logits
+def inference(images, keep_prob):
+    layers = 3
+    h = images
+    h = F.activation(F.batch_normalization(F.conv(h, 16, bias_term=False)))
+    for i in range(layers):
+        h = residual(h, channels=16, strides=1)
+    for channels in [32, 64]:
+        for i in range(layers):
+            strides = 2 if i == 0 else 1
+            h = residual(h, channels, strides)
+    h = tf.reduce_mean(h, reduction_indices=[1, 2]) # Global Average Pooling
+    h = F.dense(h, NUM_CLASSES)
+    return h
 
 def loss(logits, labels):
     labels = tf.to_int64(labels)
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
         labels=labels, logits=logits, name='xentropy')
-    return tf.reduce_mean(cross_entropy, name='xentropy_mean')
+    cross_entropy_mean = tf.reduce_mean(cross_entropy, name='xentropy_mean')
+    tf.add_to_collection('losses', cross_entropy_mean)
+    return tf.add_n(tf.get_collection('losses'))
 
 def training(loss, learning_rate):
     tf.summary.scalar('loss', loss)
-    optimizer = tf.train.AdamOptimizer(learning_rate)
-    train_op = optimizer.minimize(loss)
+    optimizer = tf.train.AdamOptimizer()
+
+    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    with tf.control_dependencies(update_ops):
+        train_op = optimizer.minimize(loss)
     return train_op
 
 def evaluating(logits, labels):
     correct = tf.nn.in_top_k(logits, labels, 1)
-    return tf.reduce_sum(tf.cast(correct, tf.int32))
+    correct_sum =  tf.reduce_sum(tf.cast(correct, tf.int32))
+    batch_size = labels.shape[0]
+    error = 1.0 - tf.cast(correct_sum, tf.float32) / tf.cast(batch_size, tf.float32)
+    tf.summary.scalar('error', error)
+    return correct_sum
