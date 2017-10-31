@@ -147,7 +147,7 @@ class FlappyBirdUI(QWidget):
         i = 0
         for pipe in self.pipes:
             pipepos = self.getRandomPipePos()
-            pipepos['x'] += pipegapx * i
+            pipepos['x'] += pipegapx * (i - 1) + self.pipesize.width() + 10
             i+=1
             pipe.movepos(pipepos)
 
@@ -166,7 +166,7 @@ class FlappyBirdUI(QWidget):
     def getRandomPipePos(self):
         gapY = random.randint(2,9)*10
         gapY += self.screensize.height() * 0.16
-        pipeX = self.screensize.width() + 10
+        pipeX = 1.5*self.screensize.width() - self.pipesize.width()
 
         return {'x': pipeX, 'yu': gapY - self.pipesize.height(), 'yl': gapY + 100}
 
@@ -182,12 +182,15 @@ class FlappyBirdUI(QWidget):
         return False
 
     def grabscreen(self):
-        img = self.grab(QRect(0, 0, self.screensize.width(), self.basey)).toImage()
-        img = img.scaled(80, 80).convertToFormat(24)
+        w = self.screensize.width()
+        h = self.basey
+        img = self.grab(QRect(0, 0, w, h)).toImage()
+        w,h = 40, 40
+        img = img.scaled(w, h).convertToFormat(24)
         self.grabLabel.setPixmap(QPixmap(img))
         ptr = img.bits()
         ptr.setsize(img.byteCount())
-        screen = np.asarray(ptr).reshape(80,80)
+        screen = np.asarray(ptr).reshape(h,w)
         return screen
 
     def gameUpdate(self, action):
