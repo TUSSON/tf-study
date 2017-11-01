@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from PyQt5.QtWidgets import (QWidget, QHBoxLayout,
-                             QLabel, QApplication)
-from PyQt5.QtGui import QPixmap, QFont, QPalette
+from PyQt5.QtWidgets import (QWidget, QLabel, QApplication)
+from PyQt5.QtGui import QPixmap, QFont
 from PyQt5.QtCore import QThread, QBasicTimer, QRect, Qt, pyqtSignal
 from game_resource import loadResource
 from deep_q_net import trainDeepQNet
@@ -11,11 +10,12 @@ import numpy as np
 import random
 import sys
 
+
 class ImageItem(QLabel):
     def __init__(self, window, pixmap=None, hitmask=None):
         super().__init__(window)
         if type(pixmap) is not list:
-            pixmap = [pixmap] 
+            pixmap = [pixmap]
             hitmask = [hitmask]
         self.index = 0
         self.setPixmap(pixmap[0])
@@ -37,9 +37,10 @@ class ImageItem(QLabel):
         bm = imgItem.hitmask[imgItem.index].copy()
         am += ar.y() * 1000 + ar.x()
         bm += br.y() * 1000 + br.x()
-         
+
         count = np.intersect1d(am, bm).size
         return count > 0
+
 
 class PipeItem:
     def __init__(self, window, pixmap, hitmask=None):
@@ -57,11 +58,12 @@ class PipeItem:
 
     def getx(self):
         return self.pos['x']
-        
+
     def checkOverlap(self, bird):
         up = self.pipel.checkOverlap(bird)
         lo = self.pipeu.checkOverlap(bird)
         return up or lo
+
 
 class BirdItem(ImageItem):
     def __init__(self, window, pixmap, hitmask=None):
@@ -84,7 +86,7 @@ class BirdItem(ImageItem):
             self.speed += self.acc
         elif self.speed > self.minspeed and action:
             self.speed = self.flapacc
-        
+
         y = int(self.y())
         y += self.speed
         if y < 0:
@@ -96,8 +98,10 @@ class BirdItem(ImageItem):
 
         self.move(self.x(), y)
 
+
 class FlappyBirdUI(QWidget):
     updateSignal = pyqtSignal(int)
+
     def __init__(self):
         super().__init__()
         self.pixmaps, self.hitmask = loadResource()
@@ -125,7 +129,8 @@ class FlappyBirdUI(QWidget):
         self.bird = BirdItem(self, self.pixmaps['bird'], self.hitmask['bird'])
 
         self.base = ImageItem(self, self.pixmaps['base'])
-        self.baseshift = self.pixmaps['base'].size().width() - self.screensize.width()
+        basew = self.pixmaps['base'].size().width()
+        self.baseshift = basew - self.screensize.width()
 
         self.scoreLabel = QLabel(self)
         self.scoreLabel.setFixedWidth(200)
@@ -137,7 +142,7 @@ class FlappyBirdUI(QWidget):
         self.grabLabel.setGeometry(20, self.basey+20, 80, 80)
         self.restart()
         self.show()
-        #self.timer.start(30, self)
+        # self.timer.start(30, self)
 
     def postGameUpdate(self, action):
         self.updateSignal.emit(action)
@@ -148,7 +153,7 @@ class FlappyBirdUI(QWidget):
         for pipe in self.pipes:
             pipepos = self.getRandomPipePos()
             pipepos['x'] += pipegapx * (i - 1) + self.pipesize.width() + 10
-            i+=1
+            i += 1
             pipe.movepos(pipepos)
 
         posx = self.screensize.width()*0.2
@@ -162,13 +167,13 @@ class FlappyBirdUI(QWidget):
         self.scoreLabel.setNum(0)
         self.action = 0
 
-
     def getRandomPipePos(self):
-        gapY = random.randint(2,9)*10
+        gapY = random.randint(2, 9)*10
         gapY += self.screensize.height() * 0.16
         pipeX = 1.5*self.screensize.width() - self.pipesize.width()
 
-        return {'x': pipeX, 'yu': gapY - self.pipesize.height(), 'yl': gapY + 100}
+        return {'x': pipeX, 'yu': gapY - self.pipesize.height(),
+                'yl': gapY + 100}
 
     def isCrash(self):
         for pip in self.pipes:
@@ -185,12 +190,12 @@ class FlappyBirdUI(QWidget):
         w = self.screensize.width()
         h = self.basey
         img = self.grab(QRect(0, 0, w, h)).toImage()
-        w,h = 40, 40
+        w, h = 40, 40
         img = img.scaled(w, h).convertToFormat(24)
         self.grabLabel.setPixmap(QPixmap(img))
         ptr = img.bits()
         ptr.setsize(img.byteCount())
-        screen = np.asarray(ptr).reshape(h,w)
+        screen = np.asarray(ptr).reshape(h, w)
         return screen
 
     def gameUpdate(self, action):
@@ -203,12 +208,11 @@ class FlappyBirdUI(QWidget):
             birdmx = self.bird.x() + self.bird.width()/2
             pipemx = pipe.getx() + self.pipesize.width()/2
             if pipemx <= birdmx < pipemx + 4:
-                self.score+=1
+                self.score += 1
                 reward = 1
                 self.scoreLabel.setNum(self.score)
 
         self.bird.update(action)
-            
         self.basex = -((-self.basex + 4) % self.baseshift)
         self.base.move(self.basex, self.basey)
 
@@ -235,7 +239,8 @@ class FlappyBirdUI(QWidget):
             self.action = 0
 
     def mousePressEvent(self, event):
-       self.action = 1    
+        self.action = 1
+
 
 class NetWorkThread(QThread):
     def __init__(self, ui):
@@ -253,8 +258,8 @@ class NetWorkThread(QThread):
     def run(self):
         trainDeepQNet(self.frameStep)
 
+
 if __name__ == '__main__':
-    
     app = QApplication(sys.argv)
     gameui = FlappyBirdUI()
     netThread = NetWorkThread(gameui)

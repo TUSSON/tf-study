@@ -24,22 +24,27 @@ NUM_IMAGES = ('assets/sprites/0.png',
               'assets/sprites/8.png',
               'assets/sprites/9.png')
 
+
 def getHitmask(images, flip=False):
     img = plt.imread(images)
     if flip:
-        img = img[::-1,:]
-    mask = img[:,:,3]
-    pos = np.arange(mask.shape[1])+((np.arange(mask.shape[0])*1000).reshape(-1,1))
-    return pos*mask 
+        img = img[::-1, :]
+    mask = img[:, :, 3]
+    pos = np.arange(mask.shape[1])+((np.arange(
+                mask.shape[0])*1000).reshape(-1, 1))
+    return pos*mask
+
 
 def loadResource():
     PIXMAP = {}
     PIXMAP['bird'] = [QPixmap(img) for img in BIRD_IMAGES]
     PIXMAP['bg'] = QPixmap(BACKGROUD_IMAGE)
     PIXMAP['base'] = QPixmap(BASE_IMAGE)
-    PIXMAP['pipe'] = [QPixmap(PIPE_IMAGE), QPixmap(PIPE_IMAGE).transformed(QTransform().rotate(180))]
+    PIXMAP['pipe'] = [QPixmap(PIPE_IMAGE), QPixmap(PIPE_IMAGE).transformed(
+                        QTransform().rotate(180))]
 
     HITMASK = {}
     HITMASK['bird'] = [getHitmask(img) for img in BIRD_IMAGES]
-    HITMASK['pipe'] = [getHitmask(PIPE_IMAGE), getHitmask(PIPE_IMAGE, flip=True)]
+    HITMASK['pipe'] = [getHitmask(PIPE_IMAGE),
+                       getHitmask(PIPE_IMAGE, flip=True)]
     return PIXMAP, HITMASK

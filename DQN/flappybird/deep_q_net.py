@@ -8,6 +8,7 @@ MINI_BATCH_SIZE = 32
 GAMMA = 0.99
 OBSERVE = 10000
 
+
 def inference():
     """Model function for CNN."""
     s = tf.placeholder(tf.float32, shape=(None, 40, 40, 4))
@@ -44,19 +45,20 @@ def inference():
     # Padding is added to preserve width and height.
     # Input Tensor Shape: [batch_size, 9, 9, 64]
     # Output Tensor Shape: [batch_size, 7, 7, 64]
-    #conv3 = tf.layers.conv2d(
+    # conv3 = tf.layers.conv2d(
     #    inputs=conv2,
     #    filters=64,
     #    kernel_size=[3, 3],
     #    activation=tf.nn.relu)
 
-    #conv3_flat = tf.reshape(conv3, [-1, 7 * 7 * 64])
+    # conv3_flat = tf.reshape(conv3, [-1, 7 * 7 * 64])
 
     # Dense Layer
     # Densely connected layer with 1024 neurons
     # Input Tensor Shape: [batch_size, 7 * 7 * 64]
     # Output Tensor Shape: [batch_size, 512]
-    dense = tf.layers.dense(inputs=conv3_flat, units=512, activation=tf.nn.relu)
+    dense = tf.layers.dense(inputs=conv3_flat, units=512,
+                            activation=tf.nn.relu)
 
     # Logits layer
     # Input Tensor Shape: [batch_size, 512]
@@ -64,6 +66,7 @@ def inference():
     logits = tf.layers.dense(inputs=dense, units=2)
 
     return s, logits
+
 
 def netloss(logits):
     a = tf.placeholder(tf.float32, shape=(None, 2))
@@ -73,12 +76,14 @@ def netloss(logits):
     loss = tf.reduce_mean(tf.square(q - qa))
     return a, q, loss
 
+
 def training(loss):
     optimizer = tf.train.AdamOptimizer(1e-4)
     train_op = optimizer.minimize(
         loss=loss,
         global_step=tf.train.get_global_step())
     return train_op
+
 
 def trainDeepQNet(frameStep):
     s, logits = inference()
@@ -97,7 +102,7 @@ def trainDeepQNet(frameStep):
     else:
         print("Could not find old network weights")
 
-    status, reward, terminal =  frameStep(0)
+    status, reward, terminal = frameStep(0)
     status = status.astype(np.float32)
     status = np.stack((status, status, status, status), axis=2)
 
@@ -112,9 +117,9 @@ def trainDeepQNet(frameStep):
     while True:
         q_value = sess.run(logits, feed_dict={s: [status]})[0]
 
-        #select an action
+        # select an action
         #    with probability epsilon select a random action
-        #    otherwise select Q.argmax(Q) 
+        #    otherwise select Q.argmax(Q)
         if random.random() < epsilon:
             action = 0
             if random.random() < 0.1:
@@ -123,14 +128,15 @@ def trainDeepQNet(frameStep):
         else:
             action = q_value.argmax()
 
-        #carry out action
+        # carry out action
         new_status, reward, terminal = frameStep(action)
         new_status = new_status.astype(np.float32)
         if reset_status:
-            new_status = np.stack((new_status, new_status, new_status, new_status), axis=2)
+            new_status = np.stack((new_status, new_status,
+                                   new_status, new_status), axis=2)
         else:
-            new_status = new_status[:,:,np.newaxis]
-            new_status = np.append(new_status, status[:,:,:3], axis=2)
+            new_status = new_status[:, :, np.newaxis]
+            new_status = np.append(new_status, status[:, :, :3], axis=2)
 
         reset_status = terminal
 
@@ -143,17 +149,18 @@ def trainDeepQNet(frameStep):
 
         a_t = np.zeros([2], dtype=np.float32)
         a_t[action] = 1
-        #store experience <status, action, reward, new_status> in replay memory D
+        # store experience <status, action, reward, new_status>
+        # in replay memory D
         D.append((status, a_t, reward, new_status, terminal, q_value[action]))
 
         if len(D) > MAX_REPLAY_MEMORY:
             D.pop(0)
-        
+
         if t > OBSERVE and terminal and try_times > 10:
             try_times = 0
             for train_times in range(200):
                 print("train times:", train_times)
-                #sample random transitions from replay memory D
+                # sample random transitions from replay memory D
                 exp_batch = random.sample(D, MINI_BATCH_SIZE)
                 s_batch = [exp[0] for exp in exp_batch]
                 a_batch = [exp[1] for exp in exp_batch]
@@ -162,19 +169,20 @@ def trainDeepQNet(frameStep):
                 t_batch = [exp[4] for exp in exp_batch]
                 q_batch = [exp[5] for exp in exp_batch]
 
-                #calculate target for each minibatch transition
+                # calculate target for each minibatch transition
                 newq_batch = sess.run(logits, feed_dict={s: news_batch})
 
                 for i in range(len(newq_batch)):
-                    #if new_status is terminal state then tt=rr
+                    # if new_status is terminal state then tt=rr
                     if t_batch[i]:
                         q_batch[i] = r_batch[i]
-                    #otherwise tt=rr + y*max(Q(new_status))
+                    # otherwise tt=rr + y*max(Q(new_status))
                     else:
                         q_batch[i] = (r_batch[i] + GAMMA*np.max(newq_batch[i]))
-                sess.run(train_op, feed_dict={s: s_batch, a:a_batch, q:q_batch})
+                sess.run(train_op, feed_dict={s: s_batch,
+                                              a: a_batch, q: q_batch})
 
-        status = new_status 
+        status = new_status
         t += 1
 
         if epsilon > 0.001:
@@ -182,4 +190,4 @@ def trainDeepQNet(frameStep):
                 epsilon = epsilon * 0.8
 
         if t % 5000 == 0:
-            saver.save(sess, 'saved_model/bird-dqn', global_step = t)
+            saver.save(sess, 'saved_model/bird-dqn', global_step=t)
