@@ -5,6 +5,7 @@ from sklearn.metrics import confusion_matrix
 import time
 from datetime import timedelta
 import math
+import os
 
 from tensorflow.examples.tutorials.mnist import input_data
 
@@ -67,19 +68,29 @@ sess.run(tf.global_variables_initializer())
 
 train_batch_size = 64
 
-num_iterations = 1000
+num_iterations = 2000
 
-for i in range(num_iterations):
-    x_batch, y_true_batch = data.train.next_batch(train_batch_size)
+saver = tf.train.Saver()
 
-    feed_dict_train = {x: x_batch, y_true: y_true_batch}
+checkpoint = tf.train.get_checkpoint_state("saved_model")
+if checkpoint and checkpoint.model_checkpoint_path:
+    saver.restore(sess, checkpoint.model_checkpoint_path)
+    print("Successfully loaded:", checkpoint.model_checkpoint_path)
+else:
+    print("Could not find old network weights")
 
-    sess.run(optimizer, feed_dict=feed_dict_train)
+    for i in range(num_iterations):
+        x_batch, y_true_batch = data.train.next_batch(train_batch_size)
 
-    if (i % 100 == 0) or (i == num_iterations - 1):
-        acc = sess.run(accuracy, feed_dict=feed_dict_train)
-        msg = "Optimization Iteration: {0:>6}, Training Accuracy: {1:>6.1%}"
-        print(msg.format(i, acc))
+        feed_dict_train = {x: x_batch, y_true: y_true_batch}
+
+        sess.run(optimizer, feed_dict=feed_dict_train)
+
+        if (i % 100 == 0) or (i == num_iterations - 1):
+            acc = sess.run(accuracy, feed_dict=feed_dict_train)
+            msg = "Optimization Iteration: {0:>6}, Training Accuracy: {1:>6.1%}"
+            print(msg.format(i, acc))
+    saver.save(sess, 'saved_model/mnist-ana', global_step=num_iterations)
 
 
 def optimize_image(layer_id=None, feature=0, num_iterations=30):
@@ -96,8 +107,10 @@ def optimize_image(layer_id=None, feature=0, num_iterations=30):
         feed_dict = {x_image: [image]}
         pred, grad, loss_value = sess.run([y_pred_cls, gradient, loss],
                                           feed_dict=feed_dict)
+        if i == num_iterations - 1:
+            print('i:', i, 'loss:', loss_value)
         grad = np.array(grad).squeeze()
-        step_size = 0.01 / (grad.std() + 1e-8)
+        step_size = 1 / (grad.std() + 1e-8)
         image += step_size * grad[:, :, np.newaxis]
         image = np.clip(image, 0.0, 1.0)
 
@@ -134,6 +147,8 @@ def plot_images(images, nrows=2, names='test.png'):
 
     # Ensure the plot is shown correctly with multiple plots
     # in a single Notebook cell.
+    if not os.path.exists('mnist_layer'):
+        os.mkdir('mnist_layer')
     plt.savefig('mnist_layer/{0}'.format(names))
 
 
